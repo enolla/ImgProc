@@ -27,65 +27,129 @@ module main( input logic sw[1:0], logic btnD, logic btnU,
              
     logic[1:0] start = 0;
     logic[3:0]slow;
-    logic[15:0]width = 0;
     logic[15:0]height = 0;
     logic[15:0]fwidth;
     logic[15:0]fheight;
     logic[3:0]bright;
     logic[3:0]grayscale;
-    logic[11:0]ram[3200];
     logic[11:0]store = 0;
     logic[11:0]fetch = 0;
     logic[15:0]maxwidth;
     logic[15:0]maxheigh;
     logic[15:0]written = 0;
     logic[15:0]maxwritten;
-    logic[11:0]buffer;
     logic cycle = 0;
     logic[15:0]maxrhcount = 0;
     logic[15:0]maxlhcount = 0;
     logic[2:0]delay;
     logic[15:0]lhcount;
     logic[15:0]rhcount;
-    logic[3:0]state;
-    logic[31:0]de;
     logic[31:0]maxde;
     logic[31:0]maxlvcount;
     logic[31:0]lvcount;
-    logic[31:0]rvcount;
+    logic[15:0]line;
+    logic[31:0]count;
+    logic[15:0]width;
+    logic[11:0]buffer;
+    logic DEdown;
+    logic[11:0]ram[3200];
+
+    //JA now blue
+    //JB now red
+    //JC green
+    //JD[1] is DE
+    //JD[2] is HSync
+    //JD[3] is VSync
     
     always_ff@(negedge JD[0])begin
     
-        if(!JD[1] && !JD[3])begin
-            state <= 0;
+        if(!JD[1] && !JD[3]) begin //reset
+            line <= 0;
         end
-        else if(!JD[1] && state == 0) begin
-            lvcount <= lvcount + 1;
+        else if(!JD[1] && JD[3] && line == 0)begin //vsync front porch
+            count <= count + 1;
         end
-        else if(lvcount > 20000) state <= 1;
-        else if(state == 1 && JD[1]) state <= 2;
-        else if(state == 2 && !JD[1] && JD[2]) lhcount <= lhcount + 1;
-        else if(state == 2 && !JD[1] && !JD[2])begin
-            de <= de + 1;
-            state <= 3;
+        else if(count == 26996)begin //DE goes high first line
+            count <= 0;
+            line <= 1;
         end
-        else if(state == 3 && !JD[1] && !JD[2])de <= de + 1;
-        else if(state == 3 && !JD[1] && JD[2])rhcount <= rhcount + 1;
-        else if(state == 3 && JD[1])begin
-            maxlhcount <= lhcount;
-            maxrhcount <= rhcount;
-            state <= 4;
+
+        if(JD[1]) width <= width + 1;
+        else width <= 0;
+        
+        if(width == 800) line <= line + 1;
+        
+        if(store > 3200) store <= 0;
+        if(fetch > 3200) fetch <= 0;
+
+        
+        if(line > 0 && line < 481 && width > 0 && width < 801)begin
+            ram[store] <= {JA[7:4],JB[7:4],JC[7:4]};
+            store <= store + 1;
+        end
+        
+        if(width == 800) DEdown <= 1;
+        
+        //DE will also go down at the end so be careful
+        if(DEdown)count < count + 1;
+        
+        if(line > 3 && line < 484 && width > 0 && width < 801)begin
+            vgaBlue <= buffer[11:8];
+            vgaRed <= buffer[7:4];
+            vgaGreen <= buffer[3:0];
         end
         
         
-        //        Vsync <= JD[3]; 
-        //        Hsync <= JD[2]; 
-        
+
+
+
+        Vsync <= JD[3]; 
+        Hsync <= JD[2]; 
+
     end
 
-    Display data(JD[0], maxlhcount[15:0], maxrhcount[15:0], seg, an);
+    //Display data(JD[0], 0, maxwidth[15:0], seg, an);
 
 endmodule
+
+
+/////////////////////////////////////////////////////////////////
+// horizontal timing code
+//////////////////////////////////////////////////////////////////
+//    always_ff@(negedge JD[0])begin
+    
+//        if(!JD[1] && !JD[3])begin
+//            state <= 0;
+//            lhcount <= 0;
+//            rhcount <= 0;
+//        end
+//        else if(!JD[1] && state == 0) begin
+//            lvcount <= lvcount + 1;
+//        end
+//        else if(lvcount > 20000)begin
+//            state <= 1;
+//            lvcount <= 0;
+//        end
+//        else if(state == 1 && JD[1]) state <= 2;
+//        else if(state == 2 && !JD[1] && JD[2]) lhcount <= lhcount + 1;
+//        else if(state == 2 && !JD[1] && !JD[2])begin
+//            de <= de + 1;
+//            state <= 3;
+//        end
+//        else if(state == 3 && !JD[1] && !JD[2])de <= de + 1;
+//        else if(state == 3 && !JD[1] && JD[2])rhcount <= rhcount + 1;
+//        else if(state == 3 && JD[1])begin
+////            maxlhcount <= lhcount;
+////            maxrhcount <= rhcount;
+//            state <= 4;
+//        end
+        
+//        if(lhcount > maxlhcount) maxlhcount <= lhcount;
+//        if(rhcount > maxrhcount) maxrhcount <= rhcount;
+        
+//    end
+
+//    Display data(JD[0], maxlhcount[15:0], maxrhcount[15:0], seg, an);
 
 
 
@@ -338,5 +402,3 @@ endmodule
 //    assign RW = sw[0];
              
 //    MMU Memory(btnD, RW, Data_In, Data_Out, RamCLK, RamADVn, RamCEn, RamCRE, RamOEn, RamWEn, RamLBn, RamUBn, RamWait, MemAdr,transmission, MemDB);
-
-    
